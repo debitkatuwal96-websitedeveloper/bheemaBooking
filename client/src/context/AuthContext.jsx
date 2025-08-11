@@ -124,22 +124,140 @@
 
 
 
+// import { createContext, useContext, useState, useEffect } from 'react';
+// import { useNavigate } from 'react-router-dom';
+// import axios from '../lib/axios';
+
+// const AuthContext = createContext();
+
+// export const AuthProvider = ({ children }) => {
+//   const navigate = useNavigate();
+
+//   const [user, setUser] = useState(() => {
+//     const storedUser = localStorage.getItem('user');
+//     return storedUser ? JSON.parse(storedUser) : null;
+//   });
+//   const [token, setToken] = useState(localStorage.getItem('token'));
+
+//   const setAuthToken = (token) => {
+//     if (token) {
+//       axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+//       localStorage.setItem('token', token);
+//     } else {
+//       delete axios.defaults.headers.common['Authorization'];
+//       localStorage.removeItem('token');
+//       localStorage.removeItem('user');
+//     }
+//   };
+
+//   // ✅ Moved logout ABOVE useEffect to fix ReferenceError
+//   const logout = () => {
+//     setToken(null);
+//     setUser(null);
+//     setAuthToken(null);
+//     navigate('/login');
+//   };
+
+//   const login = async (email, password) => {
+//     try {
+//       const response = await axios.post('/api/v1/auth/login', { email, password });
+//       const { token, user } = response.data;
+
+//       setToken(token);
+//       setAuthToken(token);
+//       setUser(user);
+//       localStorage.setItem('user', JSON.stringify(user));
+
+//       navigate('/');
+//       return { success: true };
+//     } catch (error) {
+//       return {
+//         success: false,
+//         message: error.response?.data?.message || 'Login failed',
+//       };
+//     }
+//   };
+
+//   const register = async (userData) => {
+//     try {
+//       const response = await axios.post('/api/v1/auth/register', userData);
+//       const { token, user } = response.data;
+
+//       setToken(token);
+//       setAuthToken(token);
+//       setUser(user);
+//       localStorage.setItem('user', JSON.stringify(user));
+
+//       return { success: true };
+//     } catch (error) {
+//       return {
+//         success: false,
+//         message: error.response?.data?.message || 'Registration failed',
+//       };
+//     }
+//   };
+
+//   useEffect(() => {
+//     const initializeAuth = async () => {
+//       if (token) {
+//         try {
+//           const response = await axios.get('/api/v1/auth/me', {
+//             headers: { Authorization: `Bearer ${token}` },
+//           });
+//           setUser(response.data.user || response.data.data);
+//           localStorage.setItem('user', JSON.stringify(response.data.user || response.data.data));
+//         } catch (error) {
+//           console.error('Auth check failed:', error);
+//           logout(); // ✅ Now works fine — defined above
+//         }
+//       }
+//     };
+//     initializeAuth();
+//   }, [token]);
+
+//   return (
+//     <AuthContext.Provider
+//       value={{
+//         user,
+//         isAuthenticated: !!user,
+//         token,
+//         login,
+//         register,
+//         logout,
+//       }}
+//     >
+//       {children}
+//     </AuthContext.Provider>
+//   );
+// };
+
+// export const useAuth = () => useContext(AuthContext);
+
+
+
+
+
+
+
+
 import { createContext, useContext, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
+import axios from '../lib/axios';
 
 const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
   const navigate = useNavigate();
-
   const [user, setUser] = useState(() => {
     const storedUser = localStorage.getItem('user');
     return storedUser ? JSON.parse(storedUser) : null;
   });
   const [token, setToken] = useState(localStorage.getItem('token'));
+  const [loading, setLoading] = useState(true);
 
+  // Centralized token management
   const setAuthToken = (token) => {
+    setToken(token);
     if (token) {
       axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
       localStorage.setItem('token', token);
@@ -150,26 +268,20 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // ✅ Moved logout ABOVE useEffect to fix ReferenceError
   const logout = () => {
-    setToken(null);
-    setUser(null);
     setAuthToken(null);
+    setUser(null);
     navigate('/login');
   };
 
   const login = async (email, password) => {
     try {
-      const response = await axios.post('/api/v1/auth/login', { email, password });
-      const { token, user } = response.data;
-
-      setToken(token);
-      setAuthToken(token);
-      setUser(user);
-      localStorage.setItem('user', JSON.stringify(user));
-
+      const { data } = await axios.post('/api/v1/auth/login', { email, password });
+      setAuthToken(data.token);
+      setUser(data.user);
+      localStorage.setItem('user', JSON.stringify(data.user));
       navigate('/');
-      return { success: true };
+      return { success: true, data };
     } catch (error) {
       return {
         success: false,
@@ -180,15 +292,11 @@ export const AuthProvider = ({ children }) => {
 
   const register = async (userData) => {
     try {
-      const response = await axios.post('/api/v1/auth/register', userData);
-      const { token, user } = response.data;
-
-      setToken(token);
-      setAuthToken(token);
-      setUser(user);
-      localStorage.setItem('user', JSON.stringify(user));
-
-      return { success: true };
+      const { data } = await axios.post('/api/v1/auth/register', userData);
+      setAuthToken(data.token);
+      setUser(data.user);
+      localStorage.setItem('user', JSON.stringify(data.user));
+      return { success: true, data };
     } catch (error) {
       return {
         success: false,
@@ -197,33 +305,41 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  // Initialize auth state
   useEffect(() => {
     const initializeAuth = async () => {
-      if (token) {
-        try {
-          const response = await axios.get('/api/v1/auth/me', {
-            headers: { Authorization: `Bearer ${token}` },
-          });
-          setUser(response.data.user || response.data.data);
-          localStorage.setItem('user', JSON.stringify(response.data.user || response.data.data));
-        } catch (error) {
-          console.error('Auth check failed:', error);
-          logout(); // ✅ Now works fine — defined above
+      try {
+        if (token) {
+          const { data } = await axios.get('/api/v1/auth/me');
+          const userData = data.user || data.data;
+          setUser(userData);
+          localStorage.setItem('user', JSON.stringify(userData));
         }
+      } catch (error) {
+        console.error('Auth check failed:', error);
+        logout();
+      } finally {
+        setLoading(false);
       }
     };
+
     initializeAuth();
   }, [token]);
+
+  if (loading) {
+    return <div>Loading authentication...</div>;
+  }
 
   return (
     <AuthContext.Provider
       value={{
         user,
-        isAuthenticated: !!user,
         token,
+        isAuthenticated: !!user,
         login,
         register,
         logout,
+        setAuthToken
       }}
     >
       {children}
